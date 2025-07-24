@@ -1,4 +1,16 @@
-📌 p34 - Sonido representativo en Websocket 🔊
+📌 p34 - Sonido representativo en Websocket 🔊 ✅ COMPLETADO
+Buscar un sonido singular en la siguiente librería de 1seg o menos (elección libre) 🎵:
+https://pixabay.com/es/sound-effects/search/?order=ec&duration=0-1
+Dicho archivo deberá ser reproducido cada que exista algún cambio en CITAS o EJECUTIVOS que pase por el Websocket 📡.
+Funcionalidad: Notificación auditiva en tiempo real para cambios sincronizados ⚡.
+
+📌 p35 - Persistencia en variables por URL 🔗 ✅ COMPLETADO
+Cada que se realice una búsqueda o filtrado, se deben concatenar las variables involucradas a la URL y frente a un RELOAD los campos partícipes tomen dichos valores y se refleje en los datos desplegados 🔄.
+Ejemplo de funcionamiento:
+Ocupo el buscador: "5518292351" y al hacer submit →
+"https://dominio.php?palabra=5518292351" 📝
+Si se hace REFRESH ocupo esos datos para cargarlos en mi frontend y disparar la búsqueda inmediatamente ⚡.
+Beneficio: Preservar estado de filtros y búsquedas entre recargas de página 💾.do representativo en Websocket 🔊
 Buscar un sonido singular en la siguiente librería de 1seg o menos (elección libre) 🎵:
 https://pixabay.com/es/sound-effects/search/?order=ec&duration=0-1
 Dicho archivo deberá ser reproducido cada que exista algún cambio en CITAS o EJECUTIVOS que pase por el Websocket 📡.

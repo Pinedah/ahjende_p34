@@ -1458,12 +1458,54 @@
             // Agregar validación de fechas
             $('#fecha-inicio-filtro, #fecha-fin-filtro').on('change', function() {
                 validarRangoFechas();
+                
+                // P35 - Actualizar URL automáticamente cuando cambien las fechas
+                if (modoFiltroFecha && !$('#buscador-citas').val()) {
+                    setTimeout(function() {
+                        cargarCitas(); // Esto ya actualizará la URL
+                    }, 300);
+                }
             });
             
             // Configurar evento para cambio de ID ejecutivo
             $('#mi-id-ejecutivo').on('change', function() {
                 miIdEjecutivo = parseInt($(this).val()) || 1;
                 log('ID ejecutivo cambiado a: ' + miIdEjecutivo);
+            });
+            
+            // P35 - Configurar eventos para actualización automática de URL
+            $('#ejecutivo-filtro, #plantel-filtro, #tipo-ejecutivo-filtro').on('change', function() {
+                if (modoFiltroFecha && !$('#buscador-citas').val()) {
+                    // Solo actualizar si estamos en modo filtro (no búsqueda)
+                    setTimeout(function() {
+                        cargarCitas(); // Esto ya actualizará la URL
+                    }, 100);
+                }
+            });
+            
+            $('#planteles-asociados-filtro').on('change', function() {
+                if (modoFiltroFecha && !$('#buscador-citas').val()) {
+                    setTimeout(function() {
+                        cargarCitas();
+                    }, 100);
+                }
+            });
+            
+            // Evento para el buscador con debounce
+            var timeoutBusqueda = null;
+            $('#buscador-citas').on('input', function() {
+                clearTimeout(timeoutBusqueda);
+                var termino = $(this).val().trim();
+                
+                if (termino.length >= 3) {
+                    timeoutBusqueda = setTimeout(function() {
+                        buscarCitas();
+                    }, 500); // Buscar después de 500ms de inactividad
+                } else if (termino.length === 0) {
+                    timeoutBusqueda = setTimeout(function() {
+                        limpiarBusqueda();
+                    }, 300);
+                }
             });
             
             // Inicializar WebSocket
@@ -1478,9 +1520,11 @@
                 console.log('columnasConfig después de cargar ejecutivos:', columnasConfig);
                 
                 inicializarTabla();
-                cargarCitas();
-                // Aplicar filtros desde URL después de cargar todo
-                aplicarFiltrosDesdeURL();
+                
+                // P35 - Aplicar parámetros desde URL antes de cargar citas por defecto
+                setTimeout(function() {
+                    aplicarParametrosDesdeURL();
+                }, 100);
                 
                 // NO aplicar colores del cache, ahora se cargan desde BD automáticamente
             }).catch(function(error) {
@@ -3798,6 +3842,32 @@
             var tipoEjecutivo = $('#tipo-ejecutivo-filtro').val();
             var incluirPlanteles = $('#planteles-asociados-filtro').is(':checked');
             
+            // P35 - Actualizar URL con parámetros de filtrado
+            var parametrosURL = {
+                modo_filtro: 'fecha'
+            };
+            
+            if (fechaInicio) {
+                parametrosURL.fecha_inicio = fechaInicio;
+            }
+            if (fechaFin) {
+                parametrosURL.fecha_fin = fechaFin;
+            }
+            if (idEjecutivo) {
+                parametrosURL.ejecutivo = idEjecutivo;
+            }
+            if (idPlantel) {
+                parametrosURL.plantel = idPlantel;
+            }
+            if (tipoEjecutivo) {
+                parametrosURL.tipo_ejecutivo = tipoEjecutivo;
+            }
+            if (incluirPlanteles) {
+                parametrosURL.incluir_planteles = 'true';
+            }
+            
+            actualizarURL(parametrosURL);
+            
             var datos = { 
                 action: 'obtener_citas'
             };
@@ -3952,6 +4022,14 @@
             
             $('#fecha-inicio-filtro').val(fechaInicio);
             $('#fecha-fin-filtro').val(fechaFin);
+            
+            // P35 - Actualizar URL con filtro rápido
+            actualizarURL({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin,
+                modo_filtro: 'fecha'
+            });
+            
             cargarCitas();
         }
         
@@ -3964,6 +4042,12 @@
             }
             
             modoFiltroFecha = false;
+            
+            // P35 - Actualizar URL con término de búsqueda
+            actualizarURL({
+                palabra: termino,
+                modo_filtro: 'busqueda'
+            });
             
             $.ajax({
                 url: 'server/controlador_citas.php',
@@ -4000,6 +4084,11 @@
         
         function limpiarBusqueda() {
             $('#buscador-citas').val('');
+            modoFiltroFecha = true;
+            
+            // P35 - Limpiar parámetros de búsqueda de la URL
+            actualizarURL({});
+            
             cargarCitas();
         }
         
@@ -4023,6 +4112,9 @@
             
             // Ocultar información del filtro activo
             $('#info-filtro-activo').hide();
+            
+            // P35 - Limpiar parámetros de la URL
+            actualizarURL({});
             
             cargarCitas();
         }
@@ -4270,6 +4362,119 @@
             setTimeout(function() {
                 cargarCitas(); // Recargar datos para actualizar la vista
             }, 500);
+        }
+        
+        // =====================================
+        // P35 - FUNCIONES DE PERSISTENCIA URL
+        // =====================================
+        
+        function actualizarURL(parametros) {
+            try {
+                var url = new URL(window.location);
+                
+                // Limpiar parámetros existentes de búsqueda/filtros
+                var parametrosALimpiar = [
+                    'palabra', 'termino_busqueda', 'fecha_inicio', 'fecha_fin', 
+                    'ejecutivo', 'plantel', 'tipo_ejecutivo', 'incluir_planteles',
+                    'modo_filtro'
+                ];
+                
+                parametrosALimpiar.forEach(function(param) {
+                    url.searchParams.delete(param);
+                });
+                
+                // Agregar nuevos parámetros
+                Object.keys(parametros).forEach(function(key) {
+                    if (parametros[key] !== null && parametros[key] !== '' && parametros[key] !== undefined) {
+                        url.searchParams.set(key, parametros[key]);
+                    }
+                });
+                
+                // Actualizar la URL sin recargar la página
+                window.history.pushState({}, '', url.toString());
+                
+                log('📌 URL actualizada: ' + url.toString());
+                
+            } catch (error) {
+                console.error('❌ Error al actualizar URL:', error);
+            }
+        }
+        
+        function aplicarParametrosDesdeURL() {
+            var params = obtenerParametrosURL();
+            
+            log('🔗 Aplicando parámetros desde URL: ' + JSON.stringify(params));
+            
+            // Si hay parámetro de búsqueda (palabra o termino_busqueda)
+            if (params.palabra || params.termino_busqueda) {
+                var termino = params.palabra || params.termino_busqueda;
+                $('#buscador-citas').val(termino);
+                
+                // Marcar como modo búsqueda
+                modoFiltroFecha = false;
+                
+                // Ejecutar búsqueda automáticamente
+                setTimeout(function() {
+                    buscarCitas();
+                }, 500);
+                
+                return; // Si hay búsqueda, no aplicar filtros de fecha
+            }
+            
+            // Variable para saber si se aplicó algún filtro
+            var filtroAplicado = false;
+            
+            // Aplicar filtros de fecha
+            if (params.fecha_inicio) {
+                $('#fecha-inicio-filtro').val(params.fecha_inicio);
+                filtroAplicado = true;
+            }
+            if (params.fecha_fin) {
+                $('#fecha-fin-filtro').val(params.fecha_fin);
+                filtroAplicado = true;
+            }
+            
+            // Aplicar filtros de ejecutivo
+            if (params.ejecutivo) {
+                setTimeout(function() {
+                    $('#ejecutivo-filtro').val(params.ejecutivo);
+                }, 300);
+                filtroAplicado = true;
+            }
+            
+            // Aplicar filtros de plantel
+            if (params.plantel) {
+                setTimeout(function() {
+                    $('#plantel-filtro').val(params.plantel);
+                }, 300);
+                filtroAplicado = true;
+            }
+            
+            // Aplicar filtros de tipo de ejecutivo
+            if (params.tipo_ejecutivo) {
+                setTimeout(function() {
+                    $('#tipo-ejecutivo-filtro').val(params.tipo_ejecutivo);
+                }, 300);
+                filtroAplicado = true;
+            }
+            
+            // Aplicar checkbox de planteles asociados
+            if (params.incluir_planteles === 'true') {
+                $('#planteles-asociados-filtro').prop('checked', true);
+                filtroAplicado = true;
+            }
+            
+            // Si hay algún filtro, cargar citas automáticamente
+            if (filtroAplicado) {
+                setTimeout(function() {
+                    cargarCitas();
+                }, 600);
+            } else {
+                // Si no hay parámetros URL, cargar citas con configuración por defecto
+                setTimeout(function() {
+                    cargarCitas();
+                }, 300);
+            }
         }
         
         // =====================================
